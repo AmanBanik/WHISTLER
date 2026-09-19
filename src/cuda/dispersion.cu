@@ -19,12 +19,11 @@ __global__ void apply_dispersion_kernel(float *real, float *imag, int n, float f
             f = (float)(k - n) * fs / n;
         }
         
-        float abs_f = fabsf(f);
         float tau = t0;
         
-        // Bounded effective frequency to prevent singularity and smooth cutoff
-        float f_eff = fmaxf(abs_f, 1.0f);
-        tau += D / sqrtf(f_eff);
+        // Bounded effective frequency to prevent singularity and provide a continuous numerical cutoff
+        float eff_f = fmaxf(fabsf(f), 1.0f);
+        tau += D / sqrtf(eff_f);
 
         float phase = -2.0f * (float)M_PI * f * tau;
         

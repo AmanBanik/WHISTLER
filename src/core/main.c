@@ -9,7 +9,7 @@
 int main() {
     float fs = 10000.0f; 
     int nx = 200; 
-    float *x = (float*)malloc(nx * sizeof(float));
+    float *x = (float*)SAFE_MALLOC(nx * sizeof(float));
     
     // Generate pulse
     generate_damped_pulse(x, nx, fs, 1.0f, 500.0f, 2000.0f, 0.0f);
@@ -88,7 +88,7 @@ int main() {
     printf("Host Compiler Version: GCC %s\n", __VERSION__);
     #endif
     printf("FFT Size: %d bins\n", n_fft);
-    printf("Warm-up Iterations: 0 (Implicitly covered by pipeline syncs)\n");
+    printf("Warm-up Iterations: 0\n");
     printf("Compute Benchmark Iterations: %d\n", ITERS);
     printf("E2E Benchmark Iterations: %d\n", E2E_ITERS);
     printf("Kernel Timing: cudaEvent_t\n");
@@ -158,15 +158,12 @@ int main() {
     int32_t num_bins_val = stft_n_fft / 2;
     int32_t num_frames_val = num_frames;
     int32_t version = 1;
-    if (fwrite("SPEC", 1, 4, f) != 4 ||
-        fwrite(&version, sizeof(int32_t), 1, f) != 1 ||
-        fwrite(&fs, sizeof(float), 1, f) != 1 ||
-        fwrite(&num_frames_val, sizeof(int32_t), 1, f) != 1 ||
-        fwrite(&num_bins_val, sizeof(int32_t), 1, f) != 1 ||
-        fwrite(spectrogram, sizeof(float), num_frames_val * num_bins_val, f) != (size_t)(num_frames_val * num_bins_val)) {
-        fprintf(stderr, "FATAL: Failed to write to data/spectrogram.bin\n");
-        exit(EXIT_FAILURE);
-    }
+    fwrite("SPEC", 1, 4, f);
+    write_le32(f, version);
+    write_le_float(f, fs);
+    write_le32(f, num_frames_val);
+    write_le32(f, num_bins_val);
+    write_le_float_array(f, spectrogram, num_frames_val * num_bins_val);
     fclose(f);
     printf("Pipeline complete. Wrote spectrogram.\n");
     
@@ -177,14 +174,11 @@ int main() {
     }
     int32_t audio_len = n_fft;
     int32_t version_a = 1;
-    if (fwrite("WAVA", 1, 4, fa) != 4 ||
-        fwrite(&version_a, sizeof(int32_t), 1, fa) != 1 ||
-        fwrite(&fs, sizeof(float), 1, fa) != 1 ||
-        fwrite(&audio_len, sizeof(int32_t), 1, fa) != 1 ||
-        fwrite(combined, sizeof(float), audio_len, fa) != (size_t)audio_len) {
-        fprintf(stderr, "FATAL: Failed to write to data/audio.bin\n");
-        exit(EXIT_FAILURE);
-    }
+    fwrite("WAVA", 1, 4, fa);
+    write_le32(f, version_a);
+    write_le_float(f, fs);
+    write_le32(f, audio_len);
+    write_le_float_array(fa, combined, audio_len);
     fclose(fa);
     printf("Saved audio waveform to data/audio.bin\n");
     

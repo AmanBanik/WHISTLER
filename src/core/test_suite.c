@@ -125,6 +125,15 @@ int test_low_freq_stability() {
 }
 
 // 4. Deterministic Pipeline Regression (Multipath + AWGN)
+#include <stdint.h>
+
+// Simple portable LCG for deterministic cross-platform noise
+static uint32_t lcg_state = 42;
+static inline float lcg_randf() {
+    lcg_state = lcg_state * 1664525 + 1013904223;
+    return (float)lcg_state / (float)0xFFFFFFFF;
+}
+
 int test_pipeline_regression() {
     printf("[TEST] Deterministic Full-Pipeline Regression\n");
     int n = 4096;
@@ -132,7 +141,15 @@ int test_pipeline_regression() {
     float *re = (float*)SAFE_CALLOC(n, sizeof(float));
     float *im = (float*)SAFE_CALLOC(n, sizeof(float));
     
+    // Generate base pulse
     generate_damped_pulse(re, 100, fs, 1.0f, 500.0f, 2000.0f, 0.0f);
+    
+    // Multipath (add a delayed echo)
+    int delay = (int)(0.05f * fs); // 50ms delay
+    for (int i = n - 1; i >= delay; i--) {
+        re[i] += 0.5f * re[i - delay];
+    }
+    
     fft(re, im, n);
 #if ENABLE_CUDA_TESTS
     apply_dispersion_cuda(re, im, n, fs, 0.1f, 15.0f);
@@ -141,23 +158,45 @@ int test_pipeline_regression() {
 #endif
     ifft(re, im, n);
     
-    srand(42); // deterministic seed
     float *combined = (float*)SAFE_CALLOC(n, sizeof(float));
     for (int i = 0; i < n; i++) combined[i] = re[i];
     
-    // add deterministic noise
-    for (int i = 0; i < n; i++) {
-        float noise = (((float)rand() / RAND_MAX) * 2.0f - 1.0f) * 0.1f;
-        combined[i] += noise;
+    // Deterministic Box-Muller AWGN using portable LCG
+    for (int i = 0; i < n; i += 2) {
+        float u1 = lcg_randf();
+        float u2 = lcg_randf();
+        if (u1 < 1e-6f) u1 = 1e-6f;
+        float mag = sqrtf(-2.0f * logf(u1));
+        float z0 = mag * cosf(2.0f * (float)M_PI * u2);
+        float z1 = mag * sinf(2.0f * (float)M_PI * u2);
+        combined[i] += z0 * 0.05f;
+        if (i + 1 < n) combined[i + 1] += z1 * 0.05f;
     }
     
-    // Verify signal RMS is bounded and reasonable
-    float rms = compute_rms(combined, n);
-    printf("  Final Output RMS: %f\n", rms);
+    // STFT
+    int frames;
+    float *spec = compute_stft(combined, n, 256, 64, &frames);
     
-    free(re); free(im); free(combined);
-    if (rms > 0.0f && !isnan(rms)) { printf("  -> PASSED\n\n"); return 0; }
-    else { printf("  -> FAILED\n\n"); return 1; }
+    // Compute checksum (sum of log-scaled spectrogram)
+    float sum_spec = 0.0f;
+    for (int i = 0; i < frames * 128; i++) {
+        sum_spec += spec[i];
+    }
+    
+    printf("  Final Spectrogram Sum: %f\n", sum_spec);
+    
+    free(re); free(im); free(combined); free(spec);
+    
+    // Check against known reference (allowing minor floating-point divergence)
+    float expected_sum = 3031.597656f; 
+    if (!isnan(sum_spec) && fabsf(sum_spec - expected_sum) < 5.0f) { 
+        printf("  -> PASSED\n\n"); 
+        return 0; 
+    }
+    else { 
+        printf("  -> FAILED\n\n"); 
+        return 1; 
+    }
 }
 
 // 5. FFT Size Sweep
