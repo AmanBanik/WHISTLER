@@ -65,6 +65,13 @@ Run the compiled binary to execute the physics engine. It will output the CPU/GP
 ```bash
 ./whistler_m1
 ```
+This runs the default, hardcoded physics model. If you wish to parameterize the simulation environment dynamically, use the separated CLI module:
+```bash
+./whistler_cli -p 3 -n 0.01 -d 20.0
+```
+* `-p`: Number of Multipaths to simulate (default: 2)
+* `-n`: AWGN Noise level (default: 0.005)
+* `-d`: Base Dispersion Constant (default: 15.0)
 
 You can also run the full deterministic regression test suite:
 ```bash
