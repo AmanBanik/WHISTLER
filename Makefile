@@ -4,9 +4,12 @@ CFLAGS = -Wall -Wextra -O3 -I./include
 NVCCFLAGS = -O3 -I./include -arch=sm_75
 LDFLAGS = -lm
 
-SRC_C = src/core/main.c src/core/source_gen.c src/core/signal_math.c src/core/fft.c src/core/dispersion.c src/core/stft.c
-CLI_SRC_C = src/core/main_cli.c src/core/source_gen.c src/core/signal_math.c src/core/fft.c src/core/dispersion.c src/core/stft.c
-TEST_SRC_C = src/core/test_suite.c src/core/source_gen.c src/core/signal_math.c src/core/fft.c src/core/dispersion.c src/core/stft.c
+SRC_C = src/core/main.c src/core/source_gen.c src/core/signal_math.c \
+        src/core/fft.c src/core/dispersion.c src/core/stft.c src/core/io.c
+CLI_SRC_C = src/core/main_cli.c src/core/source_gen.c src/core/signal_math.c \
+            src/core/fft.c src/core/dispersion.c src/core/stft.c src/core/io.c
+TEST_SRC_C = src/core/test_suite.c src/core/source_gen.c src/core/signal_math.c \
+             src/core/fft.c src/core/dispersion.c src/core/stft.c src/core/io.c
 SRC_CU = src/cuda/dispersion.cu
 
 OBJ_C = $(SRC_C:.c=.o)

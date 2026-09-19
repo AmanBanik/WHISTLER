@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "whistler_core.h"
+#include "io.h"
 
 int main() {
     float fs = 10000.0f; 

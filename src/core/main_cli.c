@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "whistler_core.h"
+#include "io.h"
 
 int main(int argc, char **argv) {
     int num_paths = 2;
