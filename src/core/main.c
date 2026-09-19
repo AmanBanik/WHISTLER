@@ -81,6 +81,20 @@ int main() {
     double e2e_gpu_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
     printf("======================================\n");
+    printf("HARDWARE & METHODOLOGY RECORD\n");
+    printf("--------------------------------------\n");
+    print_gpu_info();
+    #ifdef __VERSION__
+    printf("Host Compiler Version: GCC %s\n", __VERSION__);
+    #endif
+    printf("FFT Size: %d bins\n", n_fft);
+    printf("Warm-up Iterations: 0 (Implicitly covered by pipeline syncs)\n");
+    printf("Compute Benchmark Iterations: %d\n", ITERS);
+    printf("E2E Benchmark Iterations: %d\n", E2E_ITERS);
+    printf("Kernel Timing: cudaEvent_t\n");
+    printf("E2E Timing: clock_gettime(CLOCK_MONOTONIC)\n");
+    
+    printf("======================================\n");
     printf("CPU vs CUDA Validation Max Error: %e\n", max_err);
     if (max_err < 1e-4f) {
         printf("Validation PASSED! Hardware yields identical physics.\n");

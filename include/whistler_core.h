@@ -53,6 +53,7 @@ void apply_dispersion_cuda(float *real, float *imag, int n, float fs, float t0, 
 
 // Benchmark: loops kernel in CUDA to ignore PCIe overhead
 double apply_dispersion_cuda_benchmark(float *real, float *imag, int n, float fs, float t0, float D, int iters);
+void print_gpu_info();
 
 // Apply a window function to a frame
 void apply_window(float *frame, int n);

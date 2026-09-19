@@ -121,3 +121,27 @@ extern "C" {
         return (double)milliseconds / 1000.0;
     }
 }
+
+extern "C" void print_gpu_info() {
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    if (deviceCount == 0) {
+        printf("No CUDA devices found.\n");
+        return;
+    }
+    
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    
+    int driverVersion = 0, runtimeVersion = 0;
+    cudaDriverGetVersion(&driverVersion);
+    cudaRuntimeGetVersion(&runtimeVersion);
+    
+    printf("GPU Model: %s\n", prop.name);
+    printf("GPU Architecture: sm_%d%d\n", prop.major, prop.minor);
+    printf("CUDA Runtime Version: %d.%d\n", runtimeVersion / 1000, (runtimeVersion % 100) / 10);
+    printf("NVIDIA Driver Version: %d.%d\n", driverVersion / 1000, (driverVersion % 100) / 10);
+    #ifdef __CUDACC_VER_MAJOR__
+    printf("NVCC Compiler Version: %d.%d\n", __CUDACC_VER_MAJOR__, __CUDACC_VER_MINOR__);
+    #endif
+}
