@@ -9,6 +9,7 @@
 # Compiled binary
 whistler_m1
 whistler_test
+whistler_cli
 
 # Generated binary data dumps (Ignored)
 data/*.bin
