@@ -61,65 +61,21 @@ $$
 
 ## 4. Heterogeneous Implementation Architecture
 
-The WHISTLER system employs a heterogeneous computing architecture to maximize throughput and minimize latency. 
+The WHISTLER system employs a heterogeneous computing architecture to maximize throughput and minimize latency by separating tasks based on their computational profile.
 
-### 4.1 Hardware Target & Data Flow
-The codebase is designed to be compiled via `nvcc` targeting modern NVIDIA GPU architectures (SM_75+) while the host code targets a standard x86_64 or ARM64 CPU. The pipeline executes sequentially as follows:
+### 4.1 Conceptual CPU/GPU Division
+The frequency-domain phase rotation is parallelized across spectral bins using CUDA, while signal generation, FFT/IFFT orchestration, multipath synthesis, noise generation, and STFT remain on the host CPU.
 
-```mermaid
-graph TD
-    A[Pulse Generation C] --> B[FFT C]
-    B --> C{PCIe Transfer to VRAM}
-    C --> D[apply_dispersion_kernel CUDA]
-    D --> E{PCIe Transfer to RAM}
-    E --> F[IFFT C]
-    F --> G[Multipath + AWGN C]
-    G --> H[STFT Hann Window C]
-    H --> I[(Binary Data Dump)]
-    I --> J[Python plot.py]
-    J --> K[waterfall.png / .gif]
-    J --> L[whistler.wav]
-    
-    style D fill:#76B900,stroke:#333,stroke-width:2px,color:#fff
-    style A fill:#00599C,stroke:#333,stroke-width:2px,color:#fff
-    style J fill:#3776AB,stroke:#333,stroke-width:2px,color:#fff
-```
+### 4.2 Core Dispersion Operation
+In contrast to the CPU orchestrating logic, the highly parallelizable task of applying the frequency-dependent dispersion delay is offloaded to the GPU. For each frequency bin in the transformed signal, the mathematical operation:
 
-### 4.2 Core CUDA Implementation
-In contrast to the CPU orchestrating logic, the highly parallelizable task of applying the frequency-dependent dispersion delay is offloaded to the GPU via CUDA. For each frequency bin in the transformed signal, the kernel computes a non-linear phase shift involving square roots and trigonometric functions. 
+$$
+X'(f) = X(f) e^{-j2\pi f \tau(f)}
+$$
+
+is computed simultaneously across all bins. This involves a non-linear phase shift involving square roots and trigonometric functions.
 
 > **Note on Tensor Cores:** Specialized Tensor Cores were explicitly avoided for this task. Tensor Cores are designed primarily for matrix multiply-accumulate (MMA) operations and often operate at reduced precision. The dispersion calculation requires independent, element-wise transcendental math at full single-precision (FP32), making standard CUDA ALUs the optimal and necessary choice to maintain physical fidelity.
-
-```cpp
-__global__ void apply_dispersion_kernel(float *real, float *imag, int n, float fs, float t0, float D) {
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
-    if (k >= n) return;
-    
-    // Handle both positive and negative frequencies
-    float f = (k <= n / 2) ? ((float)k * fs / n) : ((float)(k - n) * fs / n);
-    float abs_f = fabsf(f);
-    
-    float tau = t0;
-    // Bounded effective frequency to prevent singularity and provide a continuous numerical cutoff
-    float eff_f = fmaxf(fabsf(f), 1.0f);
-    tau += D / sqrtf(eff_f);
-    
-    float phase = -2.0f * (float)M_PI * f * tau;
-
-    // Full precision ALU execution (Avoids fast-math drift)
-    float cos_phi = cosf(phase);
-    float sin_phi = sinf(phase);
-    
-    float re = real[k];
-    float im = imag[k];
-    
-    real[k] = re * cos_phi - im * sin_phi;
-    imag[k] = re * sin_phi + im * cos_phi;
-}
-```
-
-### 4.3 Binary Serialization
-To ensure cross-platform reproducibility and decoupled visualization, the pipeline serializes the final outputs into explicit 32-bit little-endian binary blobs (`data/spectrogram.bin` and `data/audio.bin`). Each file begins with a 4-byte magic header (`"SPEC"` or `"WAVA"`) followed by tightly packed metadata (`version`, `fs`, `N`, `M`) and a flat array of IEEE-754 single-precision (FP32) floats. This enforces strict numeric portability when ingesting the data into higher-level analytical tools like Python.
 
 ---
 
