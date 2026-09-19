@@ -1,0 +1,49 @@
+#ifndef WHISTLER_CORE_H
+#define WHISTLER_CORE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Generate a damped broadband pulse
+// x(t) = A * exp(-alpha * t) * sin(2 * pi * f_c * t + phi)
+void generate_damped_pulse(float *out, int length, float fs, float A, float alpha, float fc, float phi);
+
+// Basic 1D convolution: y = x * h
+// x: input signal of length nx
+// h: impulse response of length nh
+// y: output array of length (nx + nh - 1)
+void convolve(const float *x, int nx, const float *h, int nh, float *y);
+
+// Add Additive White Gaussian Noise
+void add_awgn(float *signal, int len, float noise_std_dev);
+
+// In-place Radix-2 FFT (n must be a power of 2)
+void fft(float *real, float *imag, int n);
+
+// Inverse Radix-2 FFT (n must be a power of 2)
+void ifft(float *real, float *imag, int n);
+
+// Calculate magnitude spectrum
+void compute_spectrum(const float *real, const float *imag, float *magnitude, int n);
+
+// Apply frequency-dependent delay: tau(f) = t0 + D * f^(-1/2)
+void apply_dispersion(float *real, float *imag, int n, float fs, float t0, float D);
+
+// Frequency domain phase dispersion using CUDA
+void apply_dispersion_cuda(float *real, float *imag, int n, float fs, float t0, float D);
+
+// Benchmark: loops kernel in CUDA to ignore PCIe overhead
+void apply_dispersion_cuda_benchmark(float *real, float *imag, int n, float fs, float t0, float D, int iters);
+
+// Apply a window function to a frame
+void apply_window(float *frame, int n);
+
+// Compute STFT and return a flat spectrogram matrix
+float* compute_stft(const float *signal, int sig_len, int n_fft, int hop, int *out_frames);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // WHISTLER_CORE_H
