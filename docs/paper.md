@@ -6,7 +6,7 @@
 ---
 
 ## 1. Abstract
-This paper presents a simplified computational model for the synthesis and analysis of **lightning-generated whistlers**. A broadband electromagnetic transient is simulated and passed through a simplified magnetized-plasma propagation model, where the group delay is frequency-dependent. The output is processed using a Short-Time Fourier Transform (STFT) to produce a time-frequency trace that characteristically descends with time, a hallmark of whistler waves. Our approach provides a small, inspectable signal pipeline wherein the unusual natural phenomenon emerges from explicit signal processing operations rather than black-box models. 
+This paper presents a simplified computational model for the synthesis and analysis of **lightning-generated whistlers**. A broadband electromagnetic transient is simulated and passed through a simplified magnetized-plasma propagation model, where the phase delay is frequency-dependent. The output is processed using a Short-Time Fourier Transform (STFT) to produce a time-frequency trace that characteristically descends with time, a hallmark of whistler waves. Our approach provides a small, inspectable signal pipeline wherein the unusual natural phenomenon emerges from explicit signal processing operations rather than black-box models. 
 
 ---
 
@@ -170,7 +170,7 @@ The current model makes several explicit engineering assumptions:
 
 #### Signals & Systems Concepts Utilized
 * **Linear Time-Invariant (LTI) Systems:** The magnetospheric propagation channel is mathematically framed as a discrete LTI system where the received signal is the convolution of the lightning transient and the channel impulse response $h[n]$.
-* **Frequency-Dependent Group Delay:** Unlike ideal communication channels with constant delay, whistler dispersion relies on group delay $\tau(\omega)$ changing as a function of frequency, heavily delaying lower spectral components.
+* **Frequency-Dependent Phase Delay:** Unlike ideal communication channels with constant delay, whistler dispersion relies on a phase delay law $\tau(f)$ changing as a function of frequency, heavily delaying lower spectral components to generate characteristic group delay signatures.
 * **Short-Time Fourier Transform (STFT):** A time-frequency analysis technique used to isolate the descending tone. By taking the FFT of overlapping, windowed segments, it bypasses the time-resolution loss inherent to a standard global Fourier Transform.
 * **Hann Windowing:** Applied prior to the STFT to taper the ends of the time-domain chunks to zero, drastically reducing spectral leakage and high-frequency artifacts.
 * **Additive White Gaussian Noise (AWGN):** A foundational probabilistic noise model added to the channel to simulate thermal receiver noise and general background radiation.

@@ -15,9 +15,9 @@ float compute_rms(const float *arr, int n) {
 int test_fft_ifft_roundtrip() {
     printf("[TEST] FFT/IFFT Round Trip Validation\n");
     int n = 4096;
-    float *x = (float*)calloc(n, sizeof(float));
-    float *re = (float*)calloc(n, sizeof(float));
-    float *im = (float*)calloc(n, sizeof(float));
+    float *x = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *re = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *im = (float*)SAFE_CALLOC(n, sizeof(float));
     
     for (int i = 0; i < n; i++) {
         x[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
@@ -44,10 +44,10 @@ int test_spectrogram_equivalence() {
     printf("[TEST] CPU vs CUDA Spectrogram Equivalence\n");
     int n = 16384;
     float fs = 10000.0f;
-    float *re_cpu = (float*)calloc(n, sizeof(float));
-    float *im_cpu = (float*)calloc(n, sizeof(float));
-    float *re_gpu = (float*)calloc(n, sizeof(float));
-    float *im_gpu = (float*)calloc(n, sizeof(float));
+    float *re_cpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *im_cpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *re_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *im_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
     
     generate_damped_pulse(re_cpu, 200, fs, 1.0f, 500.0f, 2000.0f, 0.0f);
     for (int i = 0; i < n; i++) re_gpu[i] = re_cpu[i];
@@ -66,16 +66,24 @@ int test_spectrogram_equivalence() {
     float *spec_gpu = compute_stft(re_gpu, n, 256, 64, &frames_gpu);
     
     float max_err = 0.0f;
+    float sum_sq_err = 0.0f;
+    float sum_sq_ref = 0.0f;
     for (int i = 0; i < frames_cpu * 128; i++) {
         float err = fabsf(spec_cpu[i] - spec_gpu[i]);
         if (err > max_err) max_err = err;
+        sum_sq_err += err * err;
+        sum_sq_ref += spec_cpu[i] * spec_cpu[i];
     }
+    float rms_err = sqrtf(sum_sq_err / (frames_cpu * 128));
+    float rel_err = (sum_sq_ref > 0.0f) ? sqrtf(sum_sq_err / sum_sq_ref) : 0.0f;
     
     free(re_cpu); free(im_cpu); free(re_gpu); free(im_gpu);
     free(spec_cpu); free(spec_gpu);
     
     printf("  Spectrogram Max Error: %e\n", max_err);
-    if (max_err < 1e-4f) { printf("  -> PASSED\n\n"); return 0; }
+    printf("  Spectrogram RMS Error: %e\n", rms_err);
+    printf("  Spectrogram Rel Error: %e\n", rel_err);
+    if (max_err < 1e-4f && rel_err < 1e-3f) { printf("  -> PASSED\n\n"); return 0; }
     else { printf("  -> FAILED\n\n"); return 1; }
 }
 
@@ -84,10 +92,10 @@ int test_low_freq_stability() {
     printf("[TEST] Low-Frequency Stability (DC and near-DC cutoff)\n");
     int n = 1024;
     float fs = 100.0f; // very low fs
-    float *re_cpu = (float*)calloc(n, sizeof(float));
-    float *im_cpu = (float*)calloc(n, sizeof(float));
-    float *re_gpu = (float*)calloc(n, sizeof(float));
-    float *im_gpu = (float*)calloc(n, sizeof(float));
+    float *re_cpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *im_cpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *re_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *im_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
     
     re_cpu[0] = 1.0f; re_cpu[1] = 1.0f;
     re_gpu[0] = 1.0f; re_gpu[1] = 1.0f;
@@ -110,8 +118,8 @@ int test_pipeline_regression() {
     printf("[TEST] Deterministic Full-Pipeline Regression\n");
     int n = 4096;
     float fs = 10000.0f;
-    float *re = (float*)calloc(n, sizeof(float));
-    float *im = (float*)calloc(n, sizeof(float));
+    float *re = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *im = (float*)SAFE_CALLOC(n, sizeof(float));
     
     generate_damped_pulse(re, 100, fs, 1.0f, 500.0f, 2000.0f, 0.0f);
     fft(re, im, n);
@@ -119,7 +127,7 @@ int test_pipeline_regression() {
     ifft(re, im, n);
     
     srand(42); // deterministic seed
-    float *combined = (float*)calloc(n, sizeof(float));
+    float *combined = (float*)SAFE_CALLOC(n, sizeof(float));
     for (int i = 0; i < n; i++) combined[i] = re[i];
     
     // add deterministic noise
@@ -141,22 +149,16 @@ int test_pipeline_regression() {
 int test_fft_size_sweep() {
     printf("[TEST] CUDA Dispersion Kernel Scaling vs FFT Size\n");
     int sizes[] = {1024, 2048, 4096, 8192, 16384};
-    int num_sizes = 5;
-    float fs = 10000.0f;
     int iters = 10000;
     
-    for (int s = 0; s < num_sizes; s++) {
-        int n = sizes[s];
-        float *re = (float*)calloc(n, sizeof(float));
-        float *im = (float*)calloc(n, sizeof(float));
+    for (int i = 0; i < 5; i++) {
+        int n = sizes[i];
+        float *re = (float*)SAFE_CALLOC(n, sizeof(float));
+        float *im = (float*)SAFE_CALLOC(n, sizeof(float));
         
-        struct timespec start, end;
-        clock_gettime(CLOCK_MONOTONIC, &start);
-        apply_dispersion_cuda_benchmark(re, im, n, fs, 0.1f, 15.0f, iters);
-        clock_gettime(CLOCK_MONOTONIC, &end);
+        double time_taken = apply_dispersion_cuda_benchmark(re, im, n, 10000.0f, 0.1f, 15.0f, iters);
         
-        double time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-        printf("  Size: %5d | Time for %d iters: %.4f s\n", n, iters, time);
+        printf("  Size: %5d | Time for %d iters: %.4f s\n", n, iters, time_taken);
         free(re); free(im);
     }
     printf("  -> PASSED\n\n");

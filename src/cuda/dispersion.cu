@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -38,60 +39,85 @@ __global__ void apply_dispersion_kernel(float *real, float *imag, int n, float f
     }
 }
 
+#define CUDA_CHECK(call) \
+    do { \
+        cudaError_t err = call; \
+        if (err != cudaSuccess) { \
+            fprintf(stderr, "CUDA error at %s:%d code=%d(%s) \"%s\"\n", \
+                    __FILE__, __LINE__, err, cudaGetErrorString(err), #call); \
+            exit(EXIT_FAILURE); \
+        } \
+    } while (0)
+
 extern "C" void apply_dispersion_cuda(float *real, float *imag, int n, float fs, float t0, float D) {
-    float *d_real, *d_imag;
+    float *d_real = NULL, *d_imag = NULL;
     size_t size = n * sizeof(float);
     
     // Allocate device memory
-    cudaMalloc((void**)&d_real, size);
-    cudaMalloc((void**)&d_imag, size);
+    CUDA_CHECK(cudaMalloc((void**)&d_real, size));
+    CUDA_CHECK(cudaMalloc((void**)&d_imag, size));
     
     // Copy data from host to device
-    cudaMemcpy(d_real, real, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_imag, imag, size, cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(d_real, real, size, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_imag, imag, size, cudaMemcpyHostToDevice));
     
     // Launch kernel
     int threadsPerBlock = 256;
     int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
     apply_dispersion_kernel<<<blocksPerGrid, threadsPerBlock>>>(d_real, d_imag, n, fs, t0, D);
+    CUDA_CHECK(cudaGetLastError());
     
     // Wait for kernel to finish and check for errors
-    cudaDeviceSynchronize();
+    CUDA_CHECK(cudaDeviceSynchronize());
     
     // Copy result back to host
-    cudaMemcpy(real, d_real, size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(imag, d_imag, size, cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(real, d_real, size, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(imag, d_imag, size, cudaMemcpyDeviceToHost));
     
     // Free device memory
-    cudaFree(d_real);
-    cudaFree(d_imag);
+    CUDA_CHECK(cudaFree(d_real));
+    CUDA_CHECK(cudaFree(d_imag));
 }
 
 extern "C" {
-    void apply_dispersion_cuda_benchmark(float *real, float *imag, int n, float fs, float t0, float D, int iters) {
+    double apply_dispersion_cuda_benchmark(float *real, float *imag, int n, float fs, float t0, float D, int iters) {
         size_t size = n * sizeof(float);
-        float *d_real, *d_imag;
+        float *d_real = NULL, *d_imag = NULL;
         
-        cudaMalloc((void**)&d_real, size);
-        cudaMalloc((void**)&d_imag, size);
+        CUDA_CHECK(cudaMalloc((void**)&d_real, size));
+        CUDA_CHECK(cudaMalloc((void**)&d_imag, size));
         
-        cudaMemcpy(d_real, real, size, cudaMemcpyHostToDevice);
-        cudaMemcpy(d_imag, imag, size, cudaMemcpyHostToDevice);
+        CUDA_CHECK(cudaMemcpy(d_real, real, size, cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_imag, imag, size, cudaMemcpyHostToDevice));
         
         int blockSize = 256;
         int numBlocks = (n + blockSize - 1) / blockSize;
         
+        cudaEvent_t start, stop;
+        CUDA_CHECK(cudaEventCreate(&start));
+        CUDA_CHECK(cudaEventCreate(&stop));
+        
+        CUDA_CHECK(cudaEventRecord(start));
         // Loop the kernel execution (no memory transfer overhead)
         for(int i=0; i<iters; i++) {
             apply_dispersion_kernel<<<numBlocks, blockSize>>>(d_real, d_imag, n, fs, t0, D);
         }
+        CUDA_CHECK(cudaEventRecord(stop));
         
-        cudaDeviceSynchronize(); // wait for all kernel loops to finish
+        CUDA_CHECK(cudaGetLastError());
+        CUDA_CHECK(cudaEventSynchronize(stop)); // wait for all kernel loops to finish
         
-        cudaMemcpy(real, d_real, size, cudaMemcpyDeviceToHost);
-        cudaMemcpy(imag, d_imag, size, cudaMemcpyDeviceToHost);
+        float milliseconds = 0;
+        CUDA_CHECK(cudaEventElapsedTime(&milliseconds, start, stop));
         
-        cudaFree(d_real);
-        cudaFree(d_imag);
+        CUDA_CHECK(cudaMemcpy(real, d_real, size, cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(imag, d_imag, size, cudaMemcpyDeviceToHost));
+        
+        CUDA_CHECK(cudaFree(d_real));
+        CUDA_CHECK(cudaFree(d_imag));
+        CUDA_CHECK(cudaEventDestroy(start));
+        CUDA_CHECK(cudaEventDestroy(stop));
+        
+        return (double)milliseconds / 1000.0;
     }
 }

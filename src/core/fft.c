@@ -15,6 +15,11 @@ static void swap(float *a, float *b) {
 // In-place Radix-2 DIT FFT
 // Assumes n is a power of 2
 void fft(float *real, float *imag, int n) {
+    if (n <= 0 || (n & (n - 1)) != 0) {
+        fprintf(stderr, "FATAL: FFT size must be a positive power of 2 (got %d)\n", n);
+        exit(EXIT_FAILURE);
+    }
+    
     // Bit-reversal permutation
     int j = 0;
     for (int i = 0; i < n - 1; i++) {

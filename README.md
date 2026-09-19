@@ -78,6 +78,33 @@ python src/python/plot.py
 ```
 This will populate the `/data` folder with the final `whistler.wav`, `waterfall_static.png`, and `waterfall_animated.gif` artifacts.
 
+## 5. Binary Format Specification
+The physics engine writes binary files using explicit 32-bit little-endian types for portability.
+* **Audio (`data/audio.bin`)**:
+  * Magic: `"WAVA"` (4 bytes)
+  * Version: `1` (`int32_t`)
+  * Sample Rate: `fs` (`float32`)
+  * Length: `len` (`int32_t`)
+  * Payload: `len` elements of IEEE-754 `float32` PCM data.
+* **Spectrogram (`data/spectrogram.bin`)**:
+  * Magic: `"SPEC"` (4 bytes)
+  * Version: `1` (`int32_t`)
+  * Sample Rate: `fs` (`float32`)
+  * Frames: `N` (`int32_t`)
+  * Bins: `M` (`int32_t`)
+  * Payload: `N * M` elements of IEEE-754 `float32` data.
+
+## 6. Reproducibility
+* **Random Seed:** The regression tests use a deterministic seed (`srand(42)`).
+* **Compilers:** Tested with `gcc 11+` and `nvcc` (CUDA 11.4+).
+* **Hardware:** NVIDIA Turing Architecture (SM_75) or newer required.
+* **Floating Point Consistency:** The CPU and GPU implementations are mathematically identical. A numerical drift of less than $1 \times 10^{-4}$ (RMS) is considered acceptable due to transcendental approximations (`cosf`/`sinf`).
+
+## 7. Model Limitations
+* **Frequency-Dependent Delay Model:** This is an explicit, localized engineering simulation utilizing a bounded frequency-dependent phase delay ($\tau(f) = t_0 + D f^{-1/2}$). It is *not* a full Earth magnetospheric cold-plasma wave solver.
+* **Low-Frequency Cutoff:** The divergence at $f=0$ is mitigated by a continuous numerical bound (`fmaxf(f, 1.0f)`). This reflects a mathematical stabilization technique rather than an exact physical propagation limit boundary.
+* **Numerical Approximations:** The single-precision (IEEE-754 binary32) formats can exhibit minor platform-dependent drift.
+
 ## Conclusion
 WHISTLER demonstrates the sheer computational power of heterogeneous architectures for physics modeling. By delegating purely parallel arithmetic to the GPU and keeping sequential orchestration and signal structuring on the CPU, we drastically reduced execution time while maintaining strict numerical parity. It stands as a robust artifact of low-level digital signal processing, high-performance computing, and cross-language integration.
 

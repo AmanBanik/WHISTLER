@@ -16,7 +16,7 @@ def read_spectrogram(filename):
         fs = struct.unpack('<f', f.read(4))[0]
         num_frames = struct.unpack('<i', f.read(4))[0]
         num_bins = struct.unpack('<i', f.read(4))[0]
-        data = np.frombuffer(f.read(), dtype=np.float32) # defaults to native but we will assume it's little-endian floats
+        data = np.frombuffer(f.read(), dtype='<f4')
         spectrogram = data.reshape((num_frames, num_bins))
     return fs, spectrogram
 
@@ -30,7 +30,7 @@ def read_audio(filename):
             raise ValueError(f"Unsupported file version: {version}")
         fs = struct.unpack('<f', f.read(4))[0]
         length = struct.unpack('<i', f.read(4))[0]
-        audio_data = np.frombuffer(f.read(), dtype=np.float32)
+        audio_data = np.frombuffer(f.read(), dtype='<f4')
     return fs, audio_data
 
 def main():

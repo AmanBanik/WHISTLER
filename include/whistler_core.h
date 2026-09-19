@@ -1,6 +1,29 @@
 #ifndef WHISTLER_CORE_H
 #define WHISTLER_CORE_H
 
+#include <stdlib.h>
+#include <stdio.h>
+
+#define SAFE_CALLOC(n, size) \
+    ({ \
+        void *ptr = calloc(n, size); \
+        if (!ptr) { \
+            fprintf(stderr, "FATAL: Memory allocation failed at %s:%d\n", __FILE__, __LINE__); \
+            exit(EXIT_FAILURE); \
+        } \
+        ptr; \
+    })
+
+#define SAFE_MALLOC(size) \
+    ({ \
+        void *ptr = malloc(size); \
+        if (!ptr) { \
+            fprintf(stderr, "FATAL: Memory allocation failed at %s:%d\n", __FILE__, __LINE__); \
+            exit(EXIT_FAILURE); \
+        } \
+        ptr; \
+    })
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,7 +52,7 @@ void apply_dispersion(float *real, float *imag, int n, float fs, float t0, float
 void apply_dispersion_cuda(float *real, float *imag, int n, float fs, float t0, float D);
 
 // Benchmark: loops kernel in CUDA to ignore PCIe overhead
-void apply_dispersion_cuda_benchmark(float *real, float *imag, int n, float fs, float t0, float D, int iters);
+double apply_dispersion_cuda_benchmark(float *real, float *imag, int n, float fs, float t0, float D, int iters);
 
 // Apply a window function to a frame
 void apply_window(float *frame, int n);

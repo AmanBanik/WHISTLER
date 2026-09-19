@@ -10,18 +10,22 @@
 // Compute STFT: returns a flat array of size num_frames * (n_fft/2)
 // representing the spectrogram (magnitude squared).
 float* compute_stft(const float *signal, int sig_len, int n_fft, int hop, int *out_frames) {
+    if (sig_len <= 0 || n_fft <= 0 || hop <= 0 || n_fft > sig_len) {
+        fprintf(stderr, "FATAL: Invalid STFT parameters\n");
+        exit(EXIT_FAILURE);
+    }
     int num_frames = 1 + (sig_len - n_fft) / hop;
     if (num_frames <= 0) return NULL;
     
     *out_frames = num_frames;
     int num_bins = n_fft / 2;
-    float *spectrogram = (float*)malloc(num_frames * num_bins * sizeof(float));
+    float *spectrogram = (float*)SAFE_MALLOC(num_frames * num_bins * sizeof(float));
     
-    float *re = (float*)malloc(n_fft * sizeof(float));
-    float *im = (float*)malloc(n_fft * sizeof(float));
+    float *re = (float*)SAFE_MALLOC(n_fft * sizeof(float));
+    float *im = (float*)SAFE_MALLOC(n_fft * sizeof(float));
     
     // Precompute Hann window for crisp STFT
-    float *window = (float*)malloc(n_fft * sizeof(float));
+    float *window = (float*)SAFE_MALLOC(n_fft * sizeof(float));
     for (int i = 0; i < n_fft; i++) {
         window[i] = 0.5f * (1.0f - cosf(2.0f * (float)M_PI * i / (n_fft - 1)));
     }

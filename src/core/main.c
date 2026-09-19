@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <string.h>
+#include <stdint.h>
 #include "whistler_core.h"
 
 int main() {
@@ -17,10 +19,10 @@ int main() {
     // ============================================
     // CPU vs GPU NUMERICAL VALIDATION
     // ============================================
-    float *val_re_cpu = (float*)calloc(n_fft, sizeof(float));
-    float *val_im_cpu = (float*)calloc(n_fft, sizeof(float));
-    float *val_re_gpu = (float*)calloc(n_fft, sizeof(float));
-    float *val_im_gpu = (float*)calloc(n_fft, sizeof(float));
+    float *val_re_cpu = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+    float *val_im_cpu = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+    float *val_re_gpu = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+    float *val_im_gpu = (float*)SAFE_CALLOC(n_fft, sizeof(float));
     
     for (int i = 0; i < nx; i++) {
         val_re_cpu[i] = x[i];
@@ -57,10 +59,8 @@ int main() {
     clock_gettime(CLOCK_MONOTONIC, &end);
     double cpu_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
     
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    apply_dispersion_cuda_benchmark(val_re_gpu, val_im_gpu, n_fft, fs, 0.1f, 15.0f, ITERS);
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    double gpu_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    // Uses CUDA events internally for precise kernel-only timing
+    double gpu_time = apply_dispersion_cuda_benchmark(val_re_gpu, val_im_gpu, n_fft, fs, 0.1f, 15.0f, ITERS);
     
     // ============================================
     // END-TO-END BENCHMARK (Including PCIe Overhead)
@@ -104,11 +104,11 @@ int main() {
     // ============================================
     // PIPELINE EXECUTION (M7: Multipath & Noise)
     // ============================================
-    float *re1 = (float*)calloc(n_fft, sizeof(float));
-    float *im1 = (float*)calloc(n_fft, sizeof(float));
-    float *re2 = (float*)calloc(n_fft, sizeof(float));
-    float *im2 = (float*)calloc(n_fft, sizeof(float));
-    float *combined = (float*)calloc(n_fft, sizeof(float));
+    float *re1 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+    float *im1 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+    float *re2 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+    float *im2 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+    float *combined = (float*)SAFE_CALLOC(n_fft, sizeof(float));
     
     // Path 1 (Strong direct path)
     for (int i = 0; i < nx; i++) re1[i] = x[i];
@@ -137,31 +137,42 @@ int main() {
     float *spectrogram = compute_stft(combined, n_fft, stft_n_fft, hop, &num_frames);
     
     FILE *f = fopen("data/spectrogram.bin", "wb");
-    if (f) {
-        int num_bins = stft_n_fft / 2;
-        int version = 1;
-        fwrite("SPEC", 1, 4, f); // Magic
-        fwrite(&version, sizeof(int), 1, f);
-        fwrite(&fs, sizeof(float), 1, f);
-        fwrite(&num_frames, sizeof(int), 1, f);
-        fwrite(&num_bins, sizeof(int), 1, f);
-        fwrite(spectrogram, sizeof(float), num_frames * num_bins, f);
-        fclose(f);
-        printf("Pipeline complete. Wrote spectrogram.\n");
+    if (!f) {
+        fprintf(stderr, "FATAL: Failed to open data/spectrogram.bin\n");
+        exit(EXIT_FAILURE);
     }
+    int32_t num_bins_val = stft_n_fft / 2;
+    int32_t num_frames_val = num_frames;
+    int32_t version = 1;
+    if (fwrite("SPEC", 1, 4, f) != 4 ||
+        fwrite(&version, sizeof(int32_t), 1, f) != 1 ||
+        fwrite(&fs, sizeof(float), 1, f) != 1 ||
+        fwrite(&num_frames_val, sizeof(int32_t), 1, f) != 1 ||
+        fwrite(&num_bins_val, sizeof(int32_t), 1, f) != 1 ||
+        fwrite(spectrogram, sizeof(float), num_frames_val * num_bins_val, f) != (size_t)(num_frames_val * num_bins_val)) {
+        fprintf(stderr, "FATAL: Failed to write to data/spectrogram.bin\n");
+        exit(EXIT_FAILURE);
+    }
+    fclose(f);
+    printf("Pipeline complete. Wrote spectrogram.\n");
     
     FILE *fa = fopen("data/audio.bin", "wb");
-    if (fa) {
-        int audio_len = n_fft;
-        int version = 1;
-        fwrite("WAVA", 1, 4, fa); // Magic
-        fwrite(&version, sizeof(int), 1, fa);
-        fwrite(&fs, sizeof(float), 1, fa);
-        fwrite(&audio_len, sizeof(int), 1, fa);
-        fwrite(combined, sizeof(float), audio_len, fa);
-        fclose(fa);
-        printf("Saved audio waveform to data/audio.bin\n");
+    if (!fa) {
+        fprintf(stderr, "FATAL: Failed to open data/audio.bin\n");
+        exit(EXIT_FAILURE);
     }
+    int32_t audio_len = n_fft;
+    int32_t version_a = 1;
+    if (fwrite("WAVA", 1, 4, fa) != 4 ||
+        fwrite(&version_a, sizeof(int32_t), 1, fa) != 1 ||
+        fwrite(&fs, sizeof(float), 1, fa) != 1 ||
+        fwrite(&audio_len, sizeof(int32_t), 1, fa) != 1 ||
+        fwrite(combined, sizeof(float), audio_len, fa) != (size_t)audio_len) {
+        fprintf(stderr, "FATAL: Failed to write to data/audio.bin\n");
+        exit(EXIT_FAILURE);
+    }
+    fclose(fa);
+    printf("Saved audio waveform to data/audio.bin\n");
     
     free(x); free(re1); free(im1); free(re2); free(im2); free(combined); free(spectrogram);
     return 0;
