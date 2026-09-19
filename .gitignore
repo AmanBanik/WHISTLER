@@ -10,6 +10,7 @@
 whistler_m1
 whistler_test
 whistler_cli
+whistler_test_cpu
 
 # Generated binary data dumps (Ignored)
 data/*.bin
