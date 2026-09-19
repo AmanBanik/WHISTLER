@@ -6,7 +6,33 @@
 #include <stdint.h>
 #include "whistler_core.h"
 
-int main() {
+int main(int argc, char **argv) {
+    int num_paths = 2;
+    float noise_level = 0.005f;
+    float base_D = 15.0f;
+    
+    // Simple argument parsing
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) num_paths = atoi(argv[++i]);
+        if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) noise_level = atof(argv[++i]);
+        if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) base_D = atof(argv[++i]);
+    }
+    
+    if (num_paths < 1) {
+        fprintf(stderr, "FATAL: num_paths must be >= 1\n");
+        exit(EXIT_FAILURE);
+    }
+    if (noise_level < 0.0f) {
+        fprintf(stderr, "FATAL: noise_level must be >= 0\n");
+        exit(EXIT_FAILURE);
+    }
+    if (base_D <= 0.0f) {
+        fprintf(stderr, "FATAL: dispersion constant must be > 0\n");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Configuration -> Paths: %d, Noise Level: %f, Base Dispersion: %f\n", num_paths, noise_level, base_D);
+
     float fs = 10000.0f; 
     int nx = 200; 
     float *x = (float*)malloc(nx * sizeof(float));
@@ -118,31 +144,33 @@ int main() {
     // ============================================
     // PIPELINE EXECUTION (M7: Multipath & Noise)
     // ============================================
-    float *re1 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
-    float *im1 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
-    float *re2 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
-    float *im2 = (float*)SAFE_CALLOC(n_fft, sizeof(float));
     float *combined = (float*)SAFE_CALLOC(n_fft, sizeof(float));
     
-    // Path 1 (Strong direct path)
-    for (int i = 0; i < nx; i++) re1[i] = x[i];
-    fft(re1, im1, n_fft);
-    apply_dispersion_cuda(re1, im1, n_fft, fs, 0.1f, 15.0f); 
-    ifft(re1, im1, n_fft);
-    
-    // Path 2 (Weaker, highly dispersed multipath)
-    for (int i = 0; i < nx; i++) re2[i] = x[i];
-    fft(re2, im2, n_fft);
-    apply_dispersion_cuda(re2, im2, n_fft, fs, 0.15f, 25.0f); 
-    ifft(re2, im2, n_fft);
-    
-    // Combine paths
-    for (int i = 0; i < n_fft; i++) {
-        combined[i] = re1[i] + (0.5f * re2[i]); 
+    for (int p = 0; p < num_paths; p++) {
+        float *re = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+        float *im = (float*)SAFE_CALLOC(n_fft, sizeof(float));
+        
+        for (int i = 0; i < nx; i++) re[i] = x[i];
+        fft(re, im, n_fft);
+        
+        float t0 = 0.1f + p * 0.05f;       // Incremental delay for echoes
+        float D = base_D + p * 10.0f;      // Incremental dispersion for echoes
+        float attenuation = 1.0f / (p + 1.0f); // Amplitude falloff
+        
+        apply_dispersion_cuda(re, im, n_fft, fs, t0, D); 
+        ifft(re, im, n_fft);
+        
+        // Combine path into final buffer
+        for (int i = 0; i < n_fft; i++) {
+            combined[i] += attenuation * re[i]; 
+        }
+        
+        free(re);
+        free(im);
     }
     
     // Add noise
-    add_awgn(combined, n_fft, 0.005f);
+    add_awgn(combined, n_fft, noise_level);
     
     // STFT
     int stft_n_fft = 256;
@@ -188,6 +216,6 @@ int main() {
     fclose(fa);
     printf("Saved audio waveform to data/audio.bin\n");
     
-    free(x); free(re1); free(im1); free(re2); free(im2); free(combined); free(spectrogram);
+    free(x); free(combined); free(spectrogram);
     return 0;
 }
