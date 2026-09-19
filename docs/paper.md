@@ -118,6 +118,9 @@ __global__ void apply_dispersion_kernel(float *real, float *imag, int n, float f
 }
 ```
 
+### 4.3 Binary Serialization
+To ensure cross-platform reproducibility and decoupled visualization, the pipeline serializes the final outputs into explicit 32-bit little-endian binary blobs (`data/spectrogram.bin` and `data/audio.bin`). Each file begins with a 4-byte magic header (`"SPEC"` or `"WAVA"`) followed by tightly packed metadata (`version`, `fs`, `N`, `M`) and a flat array of IEEE-754 single-precision (FP32) floats. This enforces strict numeric portability when ingesting the data into higher-level analytical tools like Python.
+
 ---
 
 ## 5. Validation & Benchmarking
