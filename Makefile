@@ -17,11 +17,15 @@ OBJ_CU = $(SRC_CU:.cu=.o)
 TARGET = whistler_m1
 CLI_TARGET = whistler_cli
 TEST_TARGET = whistler_test
+CPU_TEST_TARGET = whistler_test_cpu
 
-all: $(TARGET) $(CLI_TARGET) $(TEST_TARGET)
+all: $(TARGET) $(CLI_TARGET) $(TEST_TARGET) $(CPU_TEST_TARGET)
 
 test: $(TEST_TARGET)
 	./$(TEST_TARGET)
+
+test-cpu: $(CPU_TEST_TARGET)
+	./$(CPU_TEST_TARGET)
 
 $(TARGET): $(OBJ_C) $(OBJ_CU)
 	$(NVCC) -o $@ $^ $(LDFLAGS)
@@ -32,6 +36,9 @@ $(CLI_TARGET): $(CLI_OBJ_C) $(OBJ_CU)
 $(TEST_TARGET): $(TEST_OBJ_C) $(OBJ_CU)
 	$(NVCC) -o $@ $^ $(LDFLAGS)
 
+$(CPU_TEST_TARGET): $(TEST_OBJ_C)
+	$(CC) -DENABLE_CUDA_TESTS=0 -o $@ $^ $(LDFLAGS)
+
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -39,4 +46,4 @@ $(TEST_TARGET): $(TEST_OBJ_C) $(OBJ_CU)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
 clean:
-	rm -f src/core/*.o src/cuda/*.o $(TARGET) $(CLI_TARGET) $(TEST_TARGET)
+	rm -f src/core/*.o src/cuda/*.o $(TARGET) $(CLI_TARGET) $(TEST_TARGET) $(CPU_TEST_TARGET)

@@ -42,6 +42,10 @@ int test_fft_ifft_roundtrip() {
 // 2. CPU vs CUDA Spectrogram Comparison
 int test_spectrogram_equivalence() {
     printf("[TEST] CPU vs CUDA Spectrogram Equivalence\n");
+#if !ENABLE_CUDA_TESTS
+    printf("  -> SKIPPED (CUDA disabled in CPU CI)\n\n");
+    return 0;
+#else
     int n = 16384;
     float fs = 10000.0f;
     float *re_cpu = (float*)SAFE_CALLOC(n, sizeof(float));
@@ -85,6 +89,7 @@ int test_spectrogram_equivalence() {
     printf("  Spectrogram Rel Error: %e\n", rel_err);
     if (max_err < 1e-4f && rel_err < 1e-3f) { printf("  -> PASSED\n\n"); return 0; }
     else { printf("  -> FAILED\n\n"); return 1; }
+#endif
 }
 
 // 3. Low-Frequency Stability (CPU & CUDA)
@@ -94,22 +99,28 @@ int test_low_freq_stability() {
     float fs = 100.0f; // very low fs
     float *re_cpu = (float*)SAFE_CALLOC(n, sizeof(float));
     float *im_cpu = (float*)SAFE_CALLOC(n, sizeof(float));
-    float *re_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
-    float *im_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
     
     re_cpu[0] = 1.0f; re_cpu[1] = 1.0f;
-    re_gpu[0] = 1.0f; re_gpu[1] = 1.0f;
-    
     apply_dispersion(re_cpu, im_cpu, n, fs, 0.1f, 15.0f);
-    apply_dispersion_cuda(re_gpu, im_gpu, n, fs, 0.1f, 15.0f);
     
     int failed = 0;
     for (int i = 0; i < n; i++) {
-        if (isnan(re_cpu[i]) || isinf(re_cpu[i]) || isnan(re_gpu[i]) || isinf(re_gpu[i])) failed = 1;
+        if (isnan(re_cpu[i]) || isinf(re_cpu[i])) failed = 1;
     }
     
-    free(re_cpu); free(im_cpu); free(re_gpu); free(im_gpu);
-    if (!failed) { printf("  -> PASSED (No NaN/Inf detected on CPU or CUDA)\n\n"); return 0; }
+#if ENABLE_CUDA_TESTS
+    float *re_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    float *im_gpu = (float*)SAFE_CALLOC(n, sizeof(float));
+    re_gpu[0] = 1.0f; re_gpu[1] = 1.0f;
+    apply_dispersion_cuda(re_gpu, im_gpu, n, fs, 0.1f, 15.0f);
+    for (int i = 0; i < n; i++) {
+        if (isnan(re_gpu[i]) || isinf(re_gpu[i])) failed = 1;
+    }
+    free(re_gpu); free(im_gpu);
+#endif
+
+    free(re_cpu); free(im_cpu);
+    if (!failed) { printf("  -> PASSED (No NaN/Inf detected)\n\n"); return 0; }
     else { printf("  -> FAILED (NaN/Inf detected)\n\n"); return 1; }
 }
 
@@ -123,7 +134,11 @@ int test_pipeline_regression() {
     
     generate_damped_pulse(re, 100, fs, 1.0f, 500.0f, 2000.0f, 0.0f);
     fft(re, im, n);
+#if ENABLE_CUDA_TESTS
     apply_dispersion_cuda(re, im, n, fs, 0.1f, 15.0f);
+#else
+    apply_dispersion(re, im, n, fs, 0.1f, 15.0f);
+#endif
     ifft(re, im, n);
     
     srand(42); // deterministic seed
@@ -148,6 +163,10 @@ int test_pipeline_regression() {
 // 5. FFT Size Sweep
 int test_fft_size_sweep() {
     printf("[TEST] CUDA Dispersion Kernel Scaling vs FFT Size\n");
+#if !ENABLE_CUDA_TESTS
+    printf("  -> SKIPPED (CUDA disabled in CPU CI)\n\n");
+    return 0;
+#else
     int sizes[] = {1024, 2048, 4096, 8192, 16384};
     int iters = 10000;
     
@@ -163,6 +182,7 @@ int test_fft_size_sweep() {
     }
     printf("  -> PASSED\n\n");
     return 0;
+#endif
 }
 
 int main() {

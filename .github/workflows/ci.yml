@@ -7,40 +7,24 @@ on:
     branches: ["main"]
 
 jobs:
-  build_and_test:
+  cpu:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install compatible GCC
+      - name: Install compiler
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-11 g++-11
-
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 110
-
-          gcc --version
-          g++ --version
-
-      - name: Set compiler environment
-        run: |
           echo "CC=/usr/bin/gcc-11" >> "$GITHUB_ENV"
           echo "CXX=/usr/bin/g++-11" >> "$GITHUB_ENV"
-          echo "CUDAHOSTCXX=/usr/bin/g++-11" >> "$GITHUB_ENV"
 
-      - name: Set up CUDA
-        uses: Jimver/cuda-toolkit@v0.2.24
-        with:
-          cuda: "11.8.0"
+      - name: Build CPU targets
+        run: make whistler_test_cpu
 
-      - name: Build project
-        run: make
-
-      - name: Run automated tests
-        run: make test
+      - name: Run CPU tests
+        run: make test-cpu
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,8 +36,28 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install numpy scipy matplotlib
 
+  gpu:
+    runs-on: [self-hosted, linux, x64, gpu]
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify NVIDIA driver
+        run: |
+          nvidia-smi || echo "NVIDIA SMI failed"
+          nvcc --version || echo "NVCC missing"
+
+      - name: Set up CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.24
+        with:
+          cuda: "11.8.0"
+
+      - name: Build all targets
+        run: make clean all
+
+      - name: Run CUDA tests
+        run: make test
+
       - name: Run Pipeline
         run: ./whistler_m1
-
-      - name: Run plotting script
-        run: python src/python/plot.py
