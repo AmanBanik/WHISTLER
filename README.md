@@ -9,7 +9,7 @@
 ## Overview
 **WHISTLER** is a high-performance, heterogeneous physics simulation engine designed to model the dispersion of Very Low Frequency (VLF) radio waves (whistlers) in the Earth's plasmasphere. Born from lightning strikes, these electromagnetic transients travel along Earth's magnetic field lines into space and back, getting dispersed such that higher frequencies arrive before lower frequencies. 
 
-This project implements a complete digital signal processing (DSP) pipeline that models this complex physical phenomenon from scratch—incorporating multi-path propagation, additive white Gaussian noise (AWGN), and Short-Time Fourier Transforms (STFT). By offloading the massive frequency-domain phase rotations to standard CUDA cores on the GPU, the engine achieves a **17.3x performance speedup** with a mathematically identical validation error of precisely machine epsilon ($1.9 \times 10^{-6}$).
+This project implements a complete digital signal processing (DSP) pipeline that models this complex physical phenomenon from scratch—incorporating multi-path propagation, additive white Gaussian noise (AWGN), and Short-Time Fourier Transforms (STFT). By offloading the massive frequency-domain phase rotations to standard CUDA cores on the GPU, the engine achieves a **17.3x compute-path performance speedup** (when data is resident on the GPU), with a mathematically identical validation error of approximately $1.9 \times 10^{-6}$.
 
 > 📖 **Read the Full Paper:** [WHISTLER: Computational Modeling of Lightning-Generated Whistlers](docs/paper.md)
 
@@ -26,7 +26,7 @@ The engine executes a sequential data-flow pipeline designed to seamlessly pass 
 3. **Plasma Dispersion (CUDA):** The frequency bins are copied to the GPU. A massively parallel CUDA kernel applies the physical dispersion equation $\tau(f) = t_0 + D f^{-1/2}$ to rotate the phase of every bin simultaneously.
 4. **Multipath & Noise (C):** The dispersed signal is returned to the CPU, converted back to the time domain via IFFT, combined with an attenuated secondary echo path, and injected with AWGN.
 5. **STFT Spectrogram (C):** The engine chunks the signal using a Hann window and computes a rolling STFT to generate a raw waterfall array.
-6. **Visualization & Audio (Python):** Python ingests the binary blobs to generate a 16-bit PCM `.wav` audio file, static high-resolution spectrograms, and dynamic animated GIFs.
+6. **Visualization & Audio (Python):** Python ingests the binary blobs (which use explicit little-endian 32-bit floats and ints with magic version headers) to generate a 16-bit PCM `.wav` audio file, static high-resolution spectrograms, and dynamic animated GIFs.
 
 ## Repository Structure
 ```text
@@ -48,8 +48,8 @@ WHISTLER/
 
 ### 1. Environment & Prerequisites
 To run the full heterogeneous pipeline, you need an environment with both a C/CUDA compiler stack and a Python environment for visualization.
-* **Compiler:** `gcc` (for C host code) and `nvcc` (for CUDA device code, targeting SM_75+)
-* **Hardware:** NVIDIA GPU (Standard CUDA ALUs utilized; Tensor Cores explicitly avoided for single-precision accuracy)
+* **Compiler:** `gcc` (for C host code) and `nvcc` (for CUDA device code, explicitly targeting `-arch=sm_75`).
+* **Hardware:** Any NVIDIA GPU supported by your installed CUDA toolkit (Tested on Turing architecture SM_75 and newer). Tensor Cores are explicitly avoided for single-precision accuracy.
 * **Python Environment:** Python 3.10+
   * *Libraries:* `numpy`, `matplotlib`, `scipy`
 
@@ -60,10 +60,15 @@ make clean
 make
 ```
 
-### 3. Executing the Pipeline
+### 3. Executing the Pipeline & Tests
 Run the compiled binary to execute the physics engine. It will output the CPU/GPU validation metrics, benching results, and dump the raw binary data into the `/data` directory:
 ```bash
 ./whistler_m1
+```
+
+You can also run the full deterministic regression test suite:
+```bash
+make test
 ```
 
 ### 4. Generating Visuals & Audio

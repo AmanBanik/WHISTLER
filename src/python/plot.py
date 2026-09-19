@@ -10,11 +10,13 @@ def read_spectrogram(filename):
         magic = f.read(4)
         if magic != b'SPEC':
             raise ValueError("Invalid spectrogram file")
-        version = struct.unpack('i', f.read(4))[0]
-        fs = struct.unpack('f', f.read(4))[0]
-        num_frames = struct.unpack('i', f.read(4))[0]
-        num_bins = struct.unpack('i', f.read(4))[0]
-        data = np.frombuffer(f.read(), dtype=np.float32)
+        version = struct.unpack('<i', f.read(4))[0]
+        if version != 1:
+            raise ValueError(f"Unsupported file version: {version}")
+        fs = struct.unpack('<f', f.read(4))[0]
+        num_frames = struct.unpack('<i', f.read(4))[0]
+        num_bins = struct.unpack('<i', f.read(4))[0]
+        data = np.frombuffer(f.read(), dtype=np.float32) # defaults to native but we will assume it's little-endian floats
         spectrogram = data.reshape((num_frames, num_bins))
     return fs, spectrogram
 
@@ -23,9 +25,11 @@ def read_audio(filename):
         magic = f.read(4)
         if magic != b'WAVA':
             raise ValueError("Invalid audio file")
-        version = struct.unpack('i', f.read(4))[0]
-        fs = struct.unpack('f', f.read(4))[0]
-        length = struct.unpack('i', f.read(4))[0]
+        version = struct.unpack('<i', f.read(4))[0]
+        if version != 1:
+            raise ValueError(f"Unsupported file version: {version}")
+        fs = struct.unpack('<f', f.read(4))[0]
+        length = struct.unpack('<i', f.read(4))[0]
         audio_data = np.frombuffer(f.read(), dtype=np.float32)
     return fs, audio_data
 

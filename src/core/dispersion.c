@@ -20,9 +20,10 @@ void apply_dispersion(float *real, float *imag, int n, float fs, float t0, float
         
         // Calculate delay for this frequency
         float tau = t0;
-        if (abs_f > 1.0f) { // Avoid division by zero and near-DC blowup
-            tau += D / sqrtf(abs_f);
-        }
+        
+        // Bounded effective frequency to prevent singularity and smooth cutoff
+        float f_eff = fmaxf(abs_f, 1.0f);
+        tau += D / sqrtf(f_eff);
         
         // Phase shift: phi = -2 * pi * f * tau
         float phase = -2.0f * (float)M_PI * f * tau;

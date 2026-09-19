@@ -1,7 +1,7 @@
 CC = gcc
 NVCC = nvcc
 CFLAGS = -Wall -Wextra -O3 -I./include
-NVCCFLAGS = -O3 -I./include
+NVCCFLAGS = -O3 -I./include -arch=sm_75
 LDFLAGS = -lm
 
 SRC_C = src/core/main.c src/core/source_gen.c src/core/signal_math.c src/core/fft.c src/core/dispersion.c src/core/stft.c
@@ -16,6 +16,9 @@ TARGET = whistler_m1
 TEST_TARGET = whistler_test
 
 all: $(TARGET) $(TEST_TARGET)
+
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
 
 $(TARGET): $(OBJ_C) $(OBJ_CU)
 	$(NVCC) -o $@ $^ $(LDFLAGS)

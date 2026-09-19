@@ -21,7 +21,7 @@ When a lightning strike occurs, a portion of its broadband electromagnetic energ
 
 ## 3. Mathematical Model & Assumptions
 
-By framing the problem as a discrete-time signal propagating through a linear time-invariant (LTI) system with frequency-dependent group delay, we isolate the fundamental physics and signal operations from complex environmental variables.
+By framing the problem as a discrete-time signal propagating through a linear time-invariant (LTI) system with a frequency-dependent phase delay, we isolate the fundamental physics and signal operations from complex environmental variables. This is a simplified engineering approximation of a full plasma-wave solver.
 
 ### 3.1 Source Transient and Channel Response
 The lightning strike is approximated as a damped broadband pulse in the time domain:
@@ -33,13 +33,13 @@ $$
 While the propagation channel can be formulated conceptually as a time-domain convolution $y[n] = (x * h)[n]$, explicitly computing this convolution is computationally prohibitive. Instead, the implementation utilizes the mathematical equivalence of frequency-domain multiplication $Y[k] = X[k] H[k]$. By transforming the signal into the frequency domain via an FFT, the physical dispersion is efficiently applied as an element-wise phase rotation before an IFFT returns the signal to the time domain.
 
 ### 3.2 Dispersion Approximation
-To capture the physics of plasma dispersion for VLF whistler waves, we apply a frequency-dependent group delay $\tau(f)$. We use an engineering approximation that closely follows the theoretical dispersion law for whistlers:
+To capture the physics of plasma dispersion for VLF whistler waves, we apply a frequency-dependent phase delay $\tau(f)$. We use a simplified engineering approximation that captures the qualitative dispersion behavior:
 
 $$
 \tau(f) = t_0 + D f^{-1/2}
 $$
 
-where $t_0$ is the constant propagation delay and $D$ is the dispersion constant. This dictates that lower frequencies experience greater delays, generating the descending tone signature.
+where $t_0$ is the constant propagation delay and $D$ is the dispersion constant. The phase response is derived directly as $\phi(f) = -2\pi f \tau(f)$. This guarantees that lower frequencies experience greater phase wrapping, yielding the desired group delay characteristics and generating the descending tone signature.
 
 ### 3.3 Noise and Multipath Effects
 The received signal $r[n]$ is subject to Additive White Gaussian Noise (AWGN) $n[n]$, configurable to test system robustness under varying Signal-to-Noise Ratios (SNR):
@@ -100,11 +100,9 @@ __global__ void apply_dispersion_kernel(float *real, float *imag, int n, float f
     float abs_f = fabsf(f);
     
     float tau = t0;
-    // Numerical protection & physical cutoff: 
-    // Whistler mode does not propagate near DC, preventing f^-1/2 divergence.
-    if (abs_f > 1.0f) { 
-        tau += D / sqrtf(abs_f);
-    }
+    // Bounded effective frequency to prevent singularity and smooth cutoff
+    float f_eff = fmaxf(abs_f, 1.0f);
+    tau += D / sqrtf(f_eff);
     
     float phase = -2.0f * (float)M_PI * f * tau;
 
@@ -154,7 +152,14 @@ Because the frequencies involved overlap with the human auditory range, the bina
 ---
 
 ## 7. Conclusion
-This project successfully developed a simplified computational model for lightning-generated whistlers using an explicit DSP pipeline. The heterogeneous architecture effectively balances control logic on the CPU and parallelizable, transcendental element-wise operations on the GPU. The result is a highly efficient and accurate simulation framework that produces authentic time-frequency signatures of whistler waves, enabling further physical and algorithmic studies.
+This project successfully developed a simplified computational model for lightning-generated whistlers using an explicit DSP pipeline. The heterogeneous architecture effectively balances control logic on the CPU and parallelizable, transcendental element-wise operations on the GPU. The result is a highly efficient, inspectable computational approximation that produces physically motivated signatures of whistler waves, enabling further study.
+
+### 7.1 Limitations
+The current model makes several explicit engineering assumptions:
+* The dispersion and phase delay law is a simplified approximation and not derived from a full magnetospheric cold-plasma solver.
+* Multipath and noise effects are basic additive constructs.
+* The model output has not yet been rigorously validated against raw satellite or ground-based VLF recordings.
+* At $1.0\text{ Hz}$, the frequency is artificially bounded (`fmaxf`) to prevent a singularity at DC, reflecting a continuous mathematical cutoff rather than an exact physical propagation cutoff boundary.
 
 ### References & Core Concepts
 
