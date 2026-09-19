@@ -20,14 +20,3 @@ void add_awgn(float *signal, int len, float noise_std_dev) {
     }
 }
 
-void convolve(const float *x, int nx, const float *h, int nh, float *y) {
-    for (int n = 0; n < nx + nh - 1; ++n) {
-        y[n] = 0.0f;
-        for (int k = 0; k < nh; ++k) {
-            int j = n - k;
-            if (j >= 0 && j < nx) {
-                y[n] += x[j] * h[k];
-            }
-        }
-    }
-}

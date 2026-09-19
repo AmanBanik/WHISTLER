@@ -45,7 +45,7 @@ int main() {
     }
     
     // ============================================
-    // BENCHMARKING CPU vs GPU (100,000 Iterations)
+    // BENCHMARKING CPU vs GPU (100,000 Iterations - Compute Only)
     // ============================================
     struct timespec start, end;
     int ITERS = 100000;
@@ -62,6 +62,24 @@ int main() {
     clock_gettime(CLOCK_MONOTONIC, &end);
     double gpu_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
     
+    // ============================================
+    // END-TO-END BENCHMARK (Including PCIe Overhead)
+    // ============================================
+    int E2E_ITERS = 1000;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (int iter = 0; iter < E2E_ITERS; iter++) {
+        apply_dispersion(val_re_cpu, val_im_cpu, n_fft, fs, 0.1f, 15.0f);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    double e2e_cpu_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (int iter = 0; iter < E2E_ITERS; iter++) {
+        apply_dispersion_cuda(val_re_gpu, val_im_gpu, n_fft, fs, 0.1f, 15.0f);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    double e2e_gpu_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+
     printf("======================================\n");
     printf("CPU vs CUDA Validation Max Error: %e\n", max_err);
     if (max_err < 1e-4f) {
@@ -70,10 +88,15 @@ int main() {
         printf("Validation FAILED!\n");
     }
     printf("--------------------------------------\n");
-    printf("Performance (1000 iterations of %d bins):\n", n_fft);
+    printf("Compute-Path Performance (100,000 iters of %d bins):\n", n_fft);
     printf("CPU Time: %f seconds\n", cpu_time);
-    printf("GPU Time: %f seconds\n", gpu_time);
-    printf("Speedup:  %.2fx\n", cpu_time / gpu_time);
+    printf("GPU Time (Resident): %f seconds\n", gpu_time);
+    printf("Compute Speedup: %.2fx\n", cpu_time / gpu_time);
+    printf("--------------------------------------\n");
+    printf("End-to-End Performance (1,000 iters w/ PCIe & malloc overhead):\n");
+    printf("CPU Time: %f seconds\n", e2e_cpu_time);
+    printf("GPU Time (H2D + Compute + D2H): %f seconds\n", e2e_gpu_time);
+    printf("E2E Speedup: %.2fx\n", e2e_cpu_time / e2e_gpu_time);
     printf("======================================\n\n");
     
     free(val_re_cpu); free(val_im_cpu); free(val_re_gpu); free(val_im_gpu);
@@ -116,6 +139,10 @@ int main() {
     FILE *f = fopen("data/spectrogram.bin", "wb");
     if (f) {
         int num_bins = stft_n_fft / 2;
+        int version = 1;
+        fwrite("SPEC", 1, 4, f); // Magic
+        fwrite(&version, sizeof(int), 1, f);
+        fwrite(&fs, sizeof(float), 1, f);
         fwrite(&num_frames, sizeof(int), 1, f);
         fwrite(&num_bins, sizeof(int), 1, f);
         fwrite(spectrogram, sizeof(float), num_frames * num_bins, f);
@@ -126,6 +153,10 @@ int main() {
     FILE *fa = fopen("data/audio.bin", "wb");
     if (fa) {
         int audio_len = n_fft;
+        int version = 1;
+        fwrite("WAVA", 1, 4, fa); // Magic
+        fwrite(&version, sizeof(int), 1, fa);
+        fwrite(&fs, sizeof(float), 1, fa);
         fwrite(&audio_len, sizeof(int), 1, fa);
         fwrite(combined, sizeof(float), audio_len, fa);
         fclose(fa);

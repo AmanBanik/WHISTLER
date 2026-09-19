@@ -6,7 +6,7 @@
 ---
 
 ## 1. Abstract
-This paper presents a computational model for the synthesis and analysis of **lightning-generated whistlers**. A broadband electromagnetic transient is simulated and passed through a simplified magnetized-plasma propagation model, where the group delay is frequency-dependent. The output is processed using a Short-Time Fourier Transform (STFT) to produce a time-frequency trace that characteristically descends with time, a hallmark of whistler waves. Our approach provides a small, inspectable signal pipeline wherein the unusual natural phenomenon emerges from explicit signal processing operations rather than black-box models. 
+This paper presents a simplified computational model for the synthesis and analysis of **lightning-generated whistlers**. A broadband electromagnetic transient is simulated and passed through a simplified magnetized-plasma propagation model, where the group delay is frequency-dependent. The output is processed using a Short-Time Fourier Transform (STFT) to produce a time-frequency trace that characteristically descends with time, a hallmark of whistler waves. Our approach provides a small, inspectable signal pipeline wherein the unusual natural phenomenon emerges from explicit signal processing operations rather than black-box models. 
 
 ---
 
@@ -30,7 +30,7 @@ $$
 x(t) = A e^{-\alpha t} \sin(2\pi f_c t + \phi)
 $$
 
-The propagation channel is modeled as an LTI system with impulse response $h[n]$, such that the discrete-time output is $y[n] = (x * h)[n]$. In the frequency domain, this is equivalent to $Y[k] = X[k] H[k]$.
+While the propagation channel can be formulated conceptually as a time-domain convolution $y[n] = (x * h)[n]$, explicitly computing this convolution is computationally prohibitive. Instead, the implementation utilizes the mathematical equivalence of frequency-domain multiplication $Y[k] = X[k] H[k]$. By transforming the signal into the frequency domain via an FFT, the physical dispersion is efficiently applied as an element-wise phase rotation before an IFFT returns the signal to the time domain.
 
 ### 3.2 Dispersion Approximation
 To capture the physics of plasma dispersion for VLF whistler waves, we apply a frequency-dependent group delay $\tau(f)$. We use an engineering approximation that closely follows the theoretical dispersion law for whistlers:
@@ -91,23 +91,32 @@ In contrast to the CPU orchestrating logic, the highly parallelizable task of ap
 > **Note on Tensor Cores:** Specialized Tensor Cores were explicitly avoided for this task. Tensor Cores are designed primarily for matrix multiply-accumulate (MMA) operations and often operate at reduced precision. The dispersion calculation requires independent, element-wise transcendental math at full single-precision (FP32), making standard CUDA ALUs the optimal and necessary choice to maintain physical fidelity.
 
 ```cpp
-__global__ void apply_dispersion_kernel(float *re, float *im, int n_fft, float fs, float t0, float D) {
+__global__ void apply_dispersion_kernel(float *real, float *imag, int n, float fs, float t0, float D) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
-    if (k == 0 || k >= n_fft / 2) return; // Skip DC and Nyquist
-
-    float f = k * fs / n_fft;
-    float tau = t0 + D / sqrtf(f); // Frequency-dependent delay
-    float phase = -2.0f * M_PI * f * tau;
+    if (k >= n) return;
+    
+    // Handle both positive and negative frequencies
+    float f = (k <= n / 2) ? ((float)k * fs / n) : ((float)(k - n) * fs / n);
+    float abs_f = fabsf(f);
+    
+    float tau = t0;
+    // Numerical protection & physical cutoff: 
+    // Whistler mode does not propagate near DC, preventing f^-1/2 divergence.
+    if (abs_f > 1.0f) { 
+        tau += D / sqrtf(abs_f);
+    }
+    
+    float phase = -2.0f * (float)M_PI * f * tau;
 
     // Full precision ALU execution (Avoids fast-math drift)
-    float p_cos = cosf(phase);
-    float p_sin = sinf(phase);
-
-    float r = re[k];
-    float i = im[k];
-
-    re[k] = r * p_cos - i * p_sin;
-    im[k] = r * p_sin + i * p_cos;
+    float cos_phi = cosf(phase);
+    float sin_phi = sinf(phase);
+    
+    float re = real[k];
+    float im = imag[k];
+    
+    real[k] = re * cos_phi - im * sin_phi;
+    imag[k] = re * sin_phi + im * cos_phi;
 }
 ```
 
@@ -117,8 +126,8 @@ __global__ void apply_dispersion_kernel(float *re, float *im, int n_fft, float f
 
 To ensure that the hardware acceleration does not compromise the physical accuracy of the simulation, strict numerical validation was performed between the CPU and GPU implementations. 
 
-* **Physical Parity (Validation):** By applying the dispersion algorithm to identical input pulses, the maximum absolute error between the C and CUDA outputs was measured at **$1.9 \times 10^{-6}$**. This error is exactly on the order of machine epsilon for single-precision floating-point arithmetic.
-* **Performance Speedup (Benchmarking):** For a problem size of 16,384 FFT bins evaluated over 100,000 iterations, the purely CPU-based implementation required **16.32 seconds** to complete. The equivalent CUDA implementation completed the same workload in just **0.94 seconds**. This translates to a massive **17.3x speedup**.
+* **Physical Parity (Validation):** By applying the dispersion algorithm to identical input pulses, the maximum absolute error between the C and CUDA outputs was measured at **$1.9 \times 10^{-6}$**. This error is on the order expected for single-precision (FP32) numerical floating-point operations.
+* **Performance Speedup (Benchmarking):** For a problem size of 16,384 FFT bins evaluated over 100,000 iterations, the purely CPU-based implementation required **16.32 seconds** to complete. The equivalent CUDA benchmark completed the same computational workload in just **0.94 seconds** (measuring raw kernel throughput while keeping data resident on the GPU). This translates to a massive **17.3x compute-path speedup**.
 
 ---
 
@@ -145,7 +154,7 @@ Because the frequencies involved overlap with the human auditory range, the bina
 ---
 
 ## 7. Conclusion
-This project successfully developed a computational model for lightning-generated whistlers using an explicit DSP pipeline. The heterogeneous architecture effectively balances control logic on the CPU and parallelizable, transcendental element-wise operations on the GPU. The result is a highly efficient and accurate simulation framework that produces authentic time-frequency signatures of whistler waves, enabling further physical and algorithmic studies.
+This project successfully developed a simplified computational model for lightning-generated whistlers using an explicit DSP pipeline. The heterogeneous architecture effectively balances control logic on the CPU and parallelizable, transcendental element-wise operations on the GPU. The result is a highly efficient and accurate simulation framework that produces authentic time-frequency signatures of whistler waves, enabling further physical and algorithmic studies.
 
 ### References & Core Concepts
 

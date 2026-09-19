@@ -9,11 +9,6 @@ extern "C" {
 // x(t) = A * exp(-alpha * t) * sin(2 * pi * f_c * t + phi)
 void generate_damped_pulse(float *out, int length, float fs, float A, float alpha, float fc, float phi);
 
-// Basic 1D convolution: y = x * h
-// x: input signal of length nx
-// h: impulse response of length nh
-// y: output array of length (nx + nh - 1)
-void convolve(const float *x, int nx, const float *h, int nh, float *y);
 
 // Add Additive White Gaussian Noise
 void add_awgn(float *signal, int len, float noise_std_dev);
