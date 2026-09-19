@@ -176,9 +176,9 @@ int main() {
     int32_t audio_len = n_fft;
     int32_t version_a = 1;
     fwrite("WAVA", 1, 4, fa);
-    write_le32(f, version_a);
-    write_le_float(f, fs);
-    write_le32(f, audio_len);
+    write_le32(fa, version_a);
+    write_le_float(fa, fs);
+    write_le32(fa, audio_len);
     write_le_float_array(fa, combined, audio_len);
     fclose(fa);
     printf("Saved audio waveform to data/audio.bin\n");
