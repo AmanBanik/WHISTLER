@@ -6,7 +6,7 @@
 ![Status](https://img.shields.io/badge/Status-Complete-success?style=for-the-badge)
 ![Performance](https://img.shields.io/badge/Speedup-17.3x-blue?style=for-the-badge)
 
-`The SpeedUp mentiond is bound to varry with testing situation, power, compute capability and hardware`
+`The SpeedUp mentioned is bound to varry with testing situation, power, compute capability and hardware`
 
 ## Overview
 **WHISTLER** is a high-performance, heterogeneous physics simulation engine designed to model the dispersion of Very Low Frequency (VLF) radio waves (whistlers) in the Earth's plasmasphere. Born from lightning strikes, these electromagnetic transients travel along Earth's magnetic field lines into space and back, getting dispersed such that higher frequencies arrive before lower frequencies. 
